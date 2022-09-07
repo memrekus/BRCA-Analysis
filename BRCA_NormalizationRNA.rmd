@@ -1,0 +1,149 @@
+---
+title: "Normalization RNA"
+author: "memrekus"
+date: "6/7/2022"
+output: html_document
+---
+
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Load Libraries
+
+
+```{r}
+
+library("TCGAbiolinks")
+library("limma")
+library("edgeR")
+library("glmnet")
+library("factoextra")
+library("FactoMineR")
+library("caret")
+library("SummarizedExperiment")
+library("gplots")
+library("survival")
+library("survminer")
+library("RColorBrewer")
+library("gProfileR")
+library("genefilter")
+library("data.table")
+library("dplyr")
+library("tidyverse")
+library("Rsamtools")
+library("rtracklayer")
+library("AnnotationHub")
+
+```
+
+
+#Download and prepare the raw data
+
+
+```{r, eval=FALSE}
+
+query_RNA <- GDCquery(
+  
+  project = "TCGA-BRCA",
+                      
+  data.category = "Transcriptome Profiling",
+  
+  experimental.strategy = "RNA-Seq",
+  
+  workflow.type = "STAR - Counts",
+  
+  data.type = "Gene Expression Quantification")
+
+GDCdownload(query_RNA)
+
+Big_Data_RNA<-GDCprepare(query_RNA)
+
+rm(query_RNA)
+
+Big_Data_RNA<-readRDS(file = 'Big_Data_RNA.Rds')
+
+```
+
+
+#cpm / log2 normalization 
+
+
+```{r}
+
+Normal_RNA<-assay(Big_Data_RNA)
+  
+#Normal_RNA<-DGEList(counts = Normal_RNA, lib.size =colSums(Normal_RNA))
+
+#Normal_RNA<-cpm(Normal_RNA, normalized.lib.sizes = TRUE,
+       #log = TRUE, prior.count = 1)
+
+Normal_RNA <- cpm(Normal_RNA)
+
+Normal_RNA <- log(Normal_RNA+1, base = 10)
+
+```
+
+
+#Formation of dataframe
+
+
+```{r}
+
+Normal_RNA<-as.data.frame(Normal_RNA)
+
+Normal_RNA<-as.data.frame(t(Normal_RNA))
+
+#rownames(Normal_RNA)[1:]<-substr((rownames(Normal_RNA)),1,16)
+
+```
+
+
+#Gene annotation
+
+
+```{r}
+
+gene_data <- as.data.frame(rowData(Big_Data_RNA))
+
+gene_data <- gene_data %>% 
+  mutate(duplicated_name = duplicated(gene_name) | duplicated(gene_name, fromLast=T)) %>% 
+  mutate(new_name = case_when(
+    duplicated_name == TRUE ~ paste(gene_name, gene_id, sep = "_"),
+    duplicated_name == FALSE ~ gene_name,
+    TRUE ~ "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+  )) %>% 
+  mutate(new_name = make.names(new_name))
+
+colnames(Normal_RNA)<- gene_data$new_name
+
+```
+
+
+#Add patient column
+
+
+```{r}
+
+x <- Normal_RNA
+
+patient <- substr(rownames(Normal_RNA),1,12)
+
+Normal_RNA <- cbind(patient,x)
+
+```
+
+
+#Save and remove 
+
+
+```{r}
+
+saveRDS(Normal_RNA,file = "Normal_RNA.Rds")
+
+rm(Big_Data_RNA,gencodes,x,patient,gene_data)
+
+```
+

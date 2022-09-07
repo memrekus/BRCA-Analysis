@@ -1,0 +1,149 @@
+---
+title: "Normalization miRNA"
+author: "memrekus"
+date: "6/8/2022"
+output: html_document
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Load Libraries
+
+
+```{r}
+
+library("mAPKLData")
+library("mAPKL")
+library("mAPKLData")
+library("TCGAbiolinks")
+library("limma")
+library("edgeR")
+library("glmnet")
+library("factoextra")
+library("FactoMineR")
+library("caret")
+library("SummarizedExperiment")
+library("gplots")
+library("survival")
+library("survminer")
+library("RColorBrewer")
+library("gProfileR")
+library("genefilter")
+library("data.table")
+library("dplyr")
+library("tidyverse")
+library("Rsamtools")
+library("rtracklayer")
+library("AnnotationHub")
+#library("DESeq2")
+#library("pheatmap")
+#library("pasilla")
+
+```
+
+
+#Download and prepare the raw data
+
+
+```{r, eval=FALSE}
+
+query_miRNA <- GDCquery(
+  
+  project = "TCGA-SKCM",
+   
+  data.category = "Transcriptome Profiling",
+
+  experimental.strategy = "miRNA-Seq",
+   
+  workflow.type = "BCGSC miRNA Profiling",
+
+  data.type = "miRNA Expression Quantification")
+  
+GDCdownload(query_miRNA)
+
+Data_miRNA_first<-GDCprepare(query_miRNA)
+
+rm(query_miRNA)
+
+Data_miRNA_first<-readRDS('Data_miRNA_first.Rds')
+
+```
+
+
+#Create a cpm / log2 normalization 
+
+
+```{r}
+
+Normal_miRNA<-Data_miRNA_first%>%select(contains("miRNA_ID"),
+                    starts_with("read_count"))
+
+x <- Normal_miRNA[,-1]
+
+rownames(x) <- Normal_miRNA[,1]
+
+Normal_miRNA<-x
+
+rm(x)
+
+# Normal_miRNA<-DGEList(counts = Normal_miRNA, lib.size =colSums(Normal_miRNA))
+# 
+# Normal_miRNA<-cpm(Normal_miRNA, normalized.lib.sizes = TRUE,
+#        log = TRUE, prior.count = 1)
+
+Normal_miRNA <- cpm(Normal_miRNA)
+
+Normal_miRNA <- log(Normal_miRNA+1, base = 10)
+
+```
+
+
+#Formation of dataframe
+
+
+```{r}
+
+Normal_miRNA<-as.data.frame(t(Normal_miRNA))
+
+rownames(Normal_miRNA)[1:1207]<-substr((rownames(Normal_miRNA)),12,39)
+
+colnames(Normal_miRNA) <- make.names(colnames(Normal_miRNA))
+
+```
+
+
+#Add patient column
+
+
+```{r}
+
+x <- Normal_miRNA
+
+patient <- substr(rownames(Normal_miRNA),1,12)
+
+Normal_miRNA <- cbind(patient,x)
+
+```
+
+
+#Save the Normalized data
+
+
+```{r}
+
+saveRDS(Normal_miRNA,file = "Normal_miRNA.Rds")
+
+```
+
+
+#Remove
+
+
+```{r}
+
+rm(Data_miRNA_first,x,patient)
+
+```

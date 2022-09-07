@@ -1,0 +1,276 @@
+---
+title: "Download the Data"
+author: "memrekus"
+date: "6/2/2022"
+output: html_document
+---
+
+__Downloading the RNAseq, miRNAseq and Subtype data from TCGA Database__
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Load Libraries
+
+```{r}
+
+library("TCGAbiolinks")
+library("limma")
+library("edgeR")
+library("glmnet")
+library("factoextra")
+library("FactoMineR")
+library("caret")
+library("SummarizedExperiment")
+library("gplots")
+library("survival")
+library("survminer")
+library("RColorBrewer")
+library("gProfileR")
+library("genefilter")
+library("data.table")
+library("dplyr")
+library("tidyverse")
+library("readr")
+library("Rsamtools")
+library("rtracklayer")
+library("AnnotationHub")
+library("ggplot2")
+
+```
+
+
+#Download and prepare RNAseq data
+
+
+```{r, eval=FALSE}
+
+query_RNA <- GDCquery(
+  
+  project = "TCGA-BRCA",
+                      
+  data.category = "Transcriptome Profiling",
+  
+  experimental.strategy = "RNA-Seq",
+  
+  workflow.type = "STAR - Counts",
+  
+  data.type = "Gene Expression Quantification")
+
+GDCdownload(query_RNA)
+
+Big_Data_RNA<-GDCprepare(query_RNA)
+
+rm(query_RNA)
+
+Data_RNA<-assay(Big_Data_RNA)
+
+Data_RNA<-as.data.frame(Data_RNA)
+
+Data_RNA<-as.data.frame(t(Data_RNA))
+
+#Duplicate gene ids
+
+gene_data <- as.data.frame(rowData(Big_Data_RNA))
+
+gene_data <- gene_data %>% 
+  mutate(duplicated_name = duplicated(gene_name) | duplicated(gene_name, fromLast=T)) %>% 
+  mutate(new_name = case_when(
+    duplicated_name == TRUE ~ paste(gene_name, gene_id, sep = "_"),
+    duplicated_name == FALSE ~ gene_name,
+    TRUE ~ "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+  )) %>% 
+  mutate(new_name = make.names(new_name))
+
+colnames(Data_RNA)<- gene_data$new_name
+
+rm(gene_data)
+
+saveRDS(Data_RNA, file="Data_RNA.Rds")
+
+saveRDS(Big_Data_RNA,"Big_Data_RNA.Rds")
+
+Data_RNA<-readRDS(file = 'Data_RNA.Rds')
+
+Big_Data_RNA<-readRDS(file='Big_Data_RNA.Rds')
+
+```
+
+
+#Download and prepare miRNAseq data
+
+
+```{r}
+
+query_miRNA <- GDCquery(
+  
+  project = "TCGA-BRCA",
+   
+  data.category = "Transcriptome Profiling",
+
+  experimental.strategy = "miRNA-Seq",
+   
+  workflow.type = "BCGSC miRNA Profiling",
+
+  data.type = "miRNA Expression Quantification")
+  
+GDCdownload(query_miRNA)
+
+Data_miRNA_first<-GDCprepare(query_miRNA)
+
+saveRDS(Data_miRNA_first, file="Data_miRNA_first.Rds")
+
+Data_miRNA_first<-readRDS('Data_miRNA_first.Rds')
+
+rm(query_miRNA)
+
+Data_miRNA<-Data_miRNA_first%>%select(contains("miRNA_ID"),
+                    starts_with("read_count"))
+
+Data_miRNA<-as.data.frame(t(Data_miRNA))
+
+colnames(Data_miRNA) <- unlist(Data_miRNA[1,])
+
+Data_miRNA <- Data_miRNA[-1,]
+
+rownames(Data_miRNA)[1:1207]<-substr((rownames(Data_miRNA)),12,99)
+
+#Data_miRNA <- cbind(Row.names = rownames(Data_miRNA), Data_miRNA)
+
+#Data_miRNA <- Data_miRNA[,-1]
+
+#Data_miRNA$Row.names[1:1207]<-substr((rownames(Data_miRNA)),1,16)
+
+#rownames(Data_miRNA)<-Data_miRNA$Row.names
+
+#rownames(Data_miRNA[1:1207])<-substr((rownames(Data_miRNA)),1,25)
+
+saveRDS(Data_miRNA, file="Data_miRNA.Rds")
+
+Data_miRNA<-readRDS('Data_miRNA.Rds')
+
+```
+
+
+#Download and prepare Subtype data
+
+
+```{r}
+
+Data_Subtype1 <- data.frame(colData(Big_Data_RNA))
+
+#Another way to retrieve Subtype data: 
+
+Data_Subtype2 <- TCGAbiolinks::TCGAquery_subtype("BRCA")
+
+#Another way to retrieve Subtype data: 
+
+Data_Subtype3 <- GDCquery_clinic("TCGA-BRCA", type = "clinical", save.csv = F)
+
+#last processes
+
+rm(Big_Data_RNA)
+
+saveRDS(Data_Subtype1, file="Data_Subtype1.Rds")
+
+saveRDS(Data_Subtype2, file="Data_Subtype2.Rds")
+
+saveRDS(Data_Subtype3, file="Data_Subtype3.Rds")
+
+Data_Subtype1<-readRDS('Data_Subtype1.Rds')
+
+Data_Subtype2<-readRDS('Data_Subtype2.Rds')
+
+Data_Subtype3<-readRDS('Data_Subtype3.Rds')
+
+```
+
+
+#MetaData merging
+
+
+```{r}
+
+# rownames(Data_Subtype2)<-Data_Subtype2$patient
+# 
+# rownames(Data_Subtype3)<-Data_Subtype3$submitter_id
+
+names(Data_Subtype3)[2]<-"patient"
+
+Data_Subtype2[2]<-NULL
+
+Data_Subtype3[1]<-NULL
+
+# MetaData_BRCA= Data_Subtype3 %>% full_join(Data_Subtype2,by="patient")
+# 
+# MetaData_BRCA<-Data_Subtype1%>%full_join(MetaData_BRCA,by="patient")
+
+MetaData_BRCA<- full_join(Data_Subtype2,Data_Subtype3, by="patient")
+
+MetaData_BRCA<-full_join(Data_Subtype1,MetaData_BRCA, by="patient")
+
+```
+
+
+#Adding "meta" 2 all columns
+
+
+```{r}
+
+# colnames(MetaData_BRCA)[3:175] <- gsub(pattern = "",
+#                           replacement = "meta.",
+#                           x = colnames(MetaData_BRCA))
+
+colnames(MetaData_BRCA)[4:175] <- paste("meta",colnames(MetaData_BRCA)[4:175],sep = ".")
+
+```
+
+
+#Editing
+
+
+```{r}
+
+MetaData_BRCA$barcode[1227]<-"TCGA-AC-A5EI-01A-11R-A27U-13"
+
+MetaData_BRCA$sample[1227]<-"TCGA-AC-A5EI-01A"
+
+MetaData_BRCA$barcode[1228]<-"TCGA-C8-A9FZ-01A-11R-A41G-13"
+
+MetaData_BRCA$sample[1228]<-"TCGA-C8-A9FZ-01A"
+
+MetaData_BRCA<-MetaData_BRCA[-c(1228,1230),]
+
+x<-MetaData_BRCA$barcode
+
+MetaData_BRCA$barcode<-NULL
+
+rownames(MetaData_BRCA)<-x
+
+rm(x)
+
+```
+
+
+#Save
+
+
+```{r}
+
+saveRDS(MetaData_BRCA, file = 'MetaData_BRCA.Rds')
+
+MetaData_BRCA<-readRDS('MetaData_BRCA.Rds')
+
+```
+
+
+#R session info
+
+
+```{r}
+
+sessionInfo()
+
+```
+

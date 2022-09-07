@@ -1,0 +1,160 @@
+---
+title: "Merge the Normalization Data"
+author: "memrekus"
+date: "6/8/2022"
+output: html_document
+---
+
+
+__Merging the RNAseq, miRNAseq and Subtype data__
+
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Load Libraries
+
+
+```{r}
+
+library("TCGAbiolinks")
+library("limma")
+library("edgeR")
+library("glmnet")
+library("factoextra")
+library("FactoMineR")
+library("caret")
+library("SummarizedExperiment")
+library("gplots")
+library("survival")
+library("survminer")
+library("RColorBrewer")
+library("gProfileR")
+library("genefilter")
+library("data.table")
+library("dplyr")
+library("tidyverse")
+library("Rsamtools")
+library("rtracklayer")
+library("AnnotationHub")
+library("Seurat")
+library("sctransform")
+
+```
+
+
+#Loading the prepared data
+
+
+```{r}
+
+Normal_RNA<-readRDS(file='Normal_RNA.Rds')
+
+Normal_miRNA<-readRDS(file='Normal_miRNA.Rds')
+
+MetaData_BRCA<-readRDS(file='MetaData_BRCA.Rds')
+
+# Normal_RNA$patient<-substr(rownames(Normal_RNA),1,12)
+# 
+# Normal_miRNA$patient<-substr(rownames(Normal_miRNA),1,12)
+# 
+# Normal_RNA$barcode<-substr(rownames(Normal_RNA),1,28)
+#  
+# Normal_miRNA$barcode<-substr(rownames(Normal_miRNA),1,28)
+
+Normal_miRNA$sample<-substr(rownames(Normal_miRNA), 1,16)
+
+Normal_miRNA<-Normal_miRNA %>% relocate(sample, .before = patient)
+
+Normal_RNA$sample<-substr(rownames(Normal_RNA), 1,16)
+
+Normal_RNA<-Normal_RNA %>% relocate(sample, .before = patient)
+
+Normal_Total<- full_join(Normal_RNA,Normal_miRNA,by="sample")
+
+Normal_Total<-Normal_Total %>% relocate(patient.y, .before = patient.x)
+
+Normal_Total$patient.x<-NULL
+
+Normal_Total$patient.y<-NULL
+
+Normal_Total$patient<-substr(Normal_Total$sample, 1,12)
+
+Normal_Total<-Normal_Total %>% relocate(patient, .before = TSPAN6)
+
+#hsa.mir.423x,hsa.mir.1253.x #error columns in total
+
+#Normal_Total$hsa.mir.423.x<-full_join(Normal_miRNA$hsa.mir.423)
+
+#Normal_Total<-merge(x=Normal_Total,y=MetaData_BRCA,by="patient",all.x=TRUE)
+
+Normal_Total<- full_join(Normal_Total,MetaData_BRCA,by="sample")
+
+Normal_Total$patient.x<-NULL
+
+Normal_Total$patient.y<-NULL
+
+Normal_Total$patient<-substr(Normal_Total$sample, 1,12)
+
+Normal_Total<-Normal_Total %>% relocate(patient, .before = TSPAN6)
+
+```
+
+
+#Binding the data to each other
+
+
+```{r}
+
+# Normal_total<-merge(x=Normal_RNA,y=Data_Subtype,by=0, all=TRUE)
+# 
+# d <- Normal_miRNA
+# 
+# Row.names <- rownames(d)
+# 
+# rownames(d) <- NULL
+# 
+# Normal_miRNA <- cbind(Row.names,d)
+# 
+# rm(d,Row.names)
+# 
+# Normal_total= Normal_total %>% left_join(Normal_miRNA,by ="Row.names")
+# 
+# #total[is.na(total)] <- 0                 # replace NA values
+# 
+# x <- Normal_total[,-1]
+# 
+# rownames(x) <- Normal_total[,1]
+# 
+# Normal_total<-x
+# 
+# rm(x)
+# 
+# saveRDS(Normal_total,file = "Normal_total.Rds")
+
+```
+
+
+#Save
+
+
+```{r}
+
+saveRDS(Normal_Total,file = "Normal_total.Rds")
+
+Normal_total<- readRDS("Normal_total.Rds")
+
+```
+
+
+#Remove 
+
+
+```{r}
+
+rm(Normal_miRNA,Normal_RNA,MetaData_BRCA)
+
+```
+

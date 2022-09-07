@@ -1,0 +1,98 @@
+---
+title: "Untitled"
+author: "memrekus"
+date: "4/15/2022"
+output: html_document
+---
+
+```{r}
+library("TCGAbiolinks")
+library("limma")
+library("edgeR")
+library("glmnet")
+library("factoextra")
+library("FactoMineR")
+library("caret")
+library("SummarizedExperiment")
+library("gplots")
+library("survival")
+library("survminer")
+library("RColorBrewer")
+library("gProfileR")
+library("genefilter")
+```
+
+
+```{r}
+
+skcm<-readRDS("SKCM.rds")
+
+dim(skcm)
+
+ggscatter(data = skcm, 
+          x="ITGAM", 
+          y="IFNG",
+          color = "meta.gender",
+          facet.by = "meta.gender",
+          add = "reg.line",
+          palette=c("orange","purple"),
+          add.params = list(color="black"),
+          conf.int=T)
+
+
+grep(pattern = "imm",x=colnames(skcm),ignore.case = T,value = T)
+
+skcm[ , "meta.immune.subtype"]
+
+skcm$meta.immune.subtype
+
+skcm$meta.RNAseq.classification
+
+length(skcm$meta.RNAseq.classification)
+
+summary(skcm$meta.RNAseq.classification)
+
+class(skcm$meta.RNAseq.classification)
+
+
+ggboxplot(skcm, "meta.RNAseq.classification","IFNG",
+          fill = "meta.RNAseq.classification",palette = "jco")+
+          stat_compare_means(comparisons=list(c("immune","keratin"),c("immune","MITF-low")))
+```
+
+
+```{r}
+
+library(FactoMineR)
+library(factoextra)
+
+skcm <- skcm[, -c("mir_barcode")]
+ 
+meta_cols <- grep(pattern = "^meta", colnames(skcm), value = T) #startwithmeta
+
+mir_cols <- grep(pattern = "^hsa", colnames(skcm), value = T)
+
+gene_cols <- grep(pattern = "^(?!meta|hsa)", colnames(skcm), value = T, perl = T)
+
+skcm <- as.data.frame(skcm)
+
+
+
+pca_mir<-PCA(skcm[,colnames(skcm)%in%mir_cols])
+# pca_mir<-PCA(skcm[,mir_cols])
+
+p<-fviz_pca_ind(pca_mir,col.ind = skcm$meta.RNAseq.classification)
+
+p
+
+imm_genes<-grep("CD4|CD8A|ITGAM|ITGAX|CD3E|CD3G|CD274|PDCD1|TGFB1|KLRG1|TCF1|TOX2|LAG3|HAVCR|TIMD3|IFIT1|IFIT2|JAK1|JAK2|STAT1|STAT3|STAT2|STAT5|MAPK14|PIK3CA",gene_cols,value = T,ignore.case = T)
+
+pca_imm<-PCA(skcm[,imm_genes])
+
+p<-fviz_pca_ind(pca_mir,col.ind = skcm$meta.RNAseq.classification)
+
+p
+
+```
+
+
